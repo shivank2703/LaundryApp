@@ -16,7 +16,6 @@ export default function NavBar({ user }) {
       await signOut(auth);
       navigate('/login');
     } catch (err) {
-      console.error('Logout error:', err);
       alert('Failed to logout: ' + err.message);
     }
   };
@@ -30,7 +29,6 @@ export default function NavBar({ user }) {
 
         {user ? (
           <>
-            {/* Make sure the link is EXACTLY "/clothes" */}
             <Button color="inherit" component={Link} to="/clothes">
               Clothes
             </Button>
@@ -42,6 +40,9 @@ export default function NavBar({ user }) {
             </Button>
             <Button color="inherit" component={Link} to="/daily-outfits">
               Daily Outfits
+            </Button>
+            <Button color="inherit" component={Link} to="/travel">
+              Travel
             </Button>
             <Button color="inherit" onClick={handleLogout}>
               Logout

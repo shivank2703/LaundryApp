@@ -1,6 +1,6 @@
 // src/App.js
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Container } from '@mui/material';
 
 import NavBar from './components/NavBar';
@@ -8,10 +8,10 @@ import ClothingListPage from './pages/ClothingListPage';
 import DailyOutfitsPage from './pages/DailyOutfitsPage';
 import AddClothingPage from './pages/AddClothingPage';
 import LoadPlannerPage from './pages/LoadPlannerPage';
+import TravelPage from './pages/TravelPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 
-// Firebase
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
@@ -19,25 +19,15 @@ import {
   onSnapshot,
   doc,
   updateDoc,
-  addDoc
+  addDoc,
+  serverTimestamp,
+  setDoc
 } from 'firebase/firestore';
 
-// Example categories
-const CATEGORIES = [
-  'T-Shirt',
-  'Polo',
-  'Shirt',
-  'Gym Shorts',
-  'Shorts',
-  'Sweater',
-  'Hoodie',
-  'Jacket',
-  'Jeans',
-  'Sweatpants',
-  'At-Home Clothes',
-];
+/** You can store your color list and brand list in Firestore or keep them local.
+ *  For simplicity, let's keep them local in memory, updated whenever we see new items.
+ */
 
-// Converts usage selection into wear points
 function usageToPoints(usage) {
   switch (usage) {
     case 'Light Wear': return 1;
@@ -49,68 +39,126 @@ function usageToPoints(usage) {
 
 function App() {
   const [user, setUser] = useState(null);
+  const [userLoading, setUserLoading] = useState(true);
   const [clothes, setClothes] = useState([]);
 
+  // We'll store dynamic colorList, brandList in state, updated whenever new clothes appear
+  const [colorList, setColorList] = useState([
+    'Black','White','Blue','Red','Gray',
+    'Green','Yellow','Navy','Brown','Beige'
+  ]);
+  const [brandList, setBrandList] = useState([]);
+
+  // travelMode
+  const [travelMode, setTravelMode] = useState(false);
+
+  // Weekly items if you want them...
+  // etc.
+
   useEffect(() => {
-    console.log('App.js: Checking auth state...');
+    // Wait for onAuthStateChanged to finish
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      console.log('onAuthStateChanged user = ', firebaseUser);
       setUser(firebaseUser);
+      setUserLoading(false);
 
       if (firebaseUser) {
-        // Listen to user's clothes
         const colRef = collection(db, 'users', firebaseUser.uid, 'clothes');
-        const unsubSnapshot = onSnapshot(
-          colRef,
-          (snapshot) => {
-            const items = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }));
-            console.log('Fetched clothes:', items);
-            setClothes(items);
-          },
-          (error) => {
-            console.error('Firestore error reading clothes:', error);
-            setClothes([]);
-          }
-        );
+        const unsubSnapshot = onSnapshot(colRef, (snapshot) => {
+          const items = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setClothes(items);
+
+          // Extract dynamic brandList & colorList from items
+          // We'll collect them from item.brand & item.colors
+          const newBrands = [];
+          const newColors = [...colorList]; // start with defaults
+          items.forEach((c) => {
+            if (c.brand && !newBrands.includes(c.brand)) {
+              newBrands.push(c.brand);
+            }
+            if (Array.isArray(c.colors)) {
+              c.colors.forEach((col) => {
+                if (!newColors.includes(col)) {
+                  newColors.push(col);
+                }
+              });
+            }
+          });
+          setBrandList((prev) => {
+            // merge old with new
+            const merged = [...prev, ...newBrands.filter(b => !prev.includes(b))];
+            return merged;
+          });
+          setColorList((prev) => {
+            const merged = [...prev, ...newColors.filter(b => !prev.includes(b))];
+            return merged;
+          });
+        });
         return () => unsubSnapshot();
       } else {
         setClothes([]);
       }
     });
+
     return () => unsubAuth();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Add new clothing
+  // If travelMode is turned off, move all travelDirty => dirty
+  const endTravelMode = async () => {
+    if (!user) {
+      setTravelMode(false);
+      return;
+    }
+    // find all items with travelDirty
+    const travelDirtyItems = clothes.filter((c) => c.travelDirty === true);
+    for (const item of travelDirtyItems) {
+      const docRef = doc(db, 'users', user.uid, 'clothes', item.id);
+      await updateDoc(docRef, {
+        travelDirty: false,
+        dirty: true
+      });
+    }
+    setTravelMode(false);
+  };
+
   const handleAddClothing = async (item) => {
     if (!user) {
       alert('Please log in to add clothing!');
       return;
     }
     try {
-      const newItem = { wearPoints: 0, dirty: false, ...item };
-      const colRef = collection(db, 'users', user.uid, 'clothes');
-      await addDoc(colRef, newItem);
+      const newItem = {
+        wearPoints: 0,
+        dirty: false,
+        travelDirty: false,
+        createdAt: serverTimestamp(),
+        ...item
+      };
+      await addDoc(collection(db, 'users', user.uid, 'clothes'), newItem);
     } catch (err) {
       alert('Failed to add clothing: ' + err.message);
     }
   };
 
-  // Wear logic
   const handleWearClothing = async (itemId, usage) => {
     if (!user) return;
-
     const item = clothes.find((c) => c.id === itemId);
-    if (!item || item.dirty) return;
+    if (!item || item.dirty || item.travelDirty) return;
 
     const added = usageToPoints(usage);
-    const newPoints = item.wearPoints + added;
-
+    const newPoints = (item.wearPoints ?? 0) + added;
     let updateData = { wearPoints: newPoints };
+
+    // If it hits 3, check travelMode => set travelDirty or normal dirty
     if (newPoints >= 3) {
-      updateData.dirty = true;
+      if (travelMode) {
+        updateData.travelDirty = true;
+      } else {
+        updateData.dirty = true;
+      }
       if (typeof item.wearCount === 'number') {
         updateData.wearCount = item.wearCount + 1;
       }
@@ -124,26 +172,32 @@ function App() {
     }
   };
 
+  // If we're still loading user, show a loader (so we don't forcibly redirect)
+  if (userLoading) {
+    return <div style={{ margin: '2rem' }}>Loading user...</div>;
+  }
+
+  // If we want an approach that does not forcibly redirect if user is not logged in,
+  // we can let each route handle it conditionally.
   return (
     <>
       <NavBar user={user} />
       <Container sx={{ mt: 4, mb: 4 }}>
         <Routes>
-          {/* By default, go to /login */}
-          <Route path="/" element={<Navigate to="/login" />} />
-
-          {/* Auth routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
 
-          {/* Protected routes (must be logged in) */}
+          {/* Condition if not user, either do <Navigate to="/login" /> or let them see an error. 
+              We'll do the typical approach. */}
           <Route
             path="/clothes"
             element={
               user ? (
                 <ClothingListPage
                   clothes={clothes}
-                  categories={CATEGORIES}
+                  categories={[] /* pass an array of categories if you want */}
+                  colorList={colorList}
+                  brandList={brandList}
                 />
               ) : (
                 <Navigate to="/login" />
@@ -156,7 +210,11 @@ function App() {
               user ? (
                 <AddClothingPage
                   onAddClothing={handleAddClothing}
-                  categories={CATEGORIES}
+                  categories={[] /* or pass some categories */}
+                  colorList={colorList}
+                  brandList={brandList}
+                  setColorList={setColorList}
+                  setBrandList={setBrandList}
                 />
               ) : (
                 <Navigate to="/login" />
@@ -179,7 +237,7 @@ function App() {
               user ? (
                 <DailyOutfitsPage
                   clothes={clothes}
-                  categories={CATEGORIES}
+                  categories={[]}
                   onWearClothing={handleWearClothing}
                 />
               ) : (
@@ -187,9 +245,32 @@ function App() {
               )
             }
           />
+          <Route
+            path="/travel"
+            element={
+              user ? (
+                <TravelPage
+                  clothes={clothes}
+                  onWearClothing={handleWearClothing}
+                  travelMode={travelMode}
+                  setTravelMode={setTravelMode}
+                  endTravelMode={endTravelMode}
+                />
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
 
-          {/* catch all */}
-          <Route path="*" element={<Navigate to="/login" />} />
+          {/* If user wants to remain on the page after refresh, we can default to /clothes if logged in. */}
+          <Route
+            path="/"
+            element={
+              user ? <Navigate to="/clothes" /> : <Navigate to="/login" />
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/clothes" />} />
         </Routes>
       </Container>
     </>

@@ -18,45 +18,57 @@ import {
 import ClothingCard from '../components/ClothingCard';
 
 function getStatus(item) {
-  if (item.dirty || item.wearPoints >= 3) return 'Dirty';
-  if (item.wearPoints === 2) return 'Moderate Wear';
-  if (item.wearPoints === 1) return 'Light Wear';
+  if (item.travelDirty || item.dirty || (item.wearPoints ?? 0) >= 3) return 'Dirty';
+  if ((item.wearPoints ?? 0) === 2) return 'Moderate Wear';
+  if ((item.wearPoints ?? 0) === 1) return 'Light Wear';
   return 'Fresh';
 }
 
 export default function DailyOutfitsPage({
   clothes = [],
   categories = [],
-  onWearClothing = () => {},
+  onWearClothing = () => {}
 }) {
   const [searchColor, setSearchColor] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [brandSearch, setBrandSearch] = useState('');
+  const [markerSearch, setMarkerSearch] = useState('');
 
-  // Dialog
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [wearLevel, setWearLevel] = useState('Light Wear');
 
-  // Exclude dirty
+  // Exclude items that are dirty or travelDirty
   const visibleClothes = clothes.filter(
-    (item) => !(item.dirty || item.wearPoints >= 3)
+    (item) => !(item.dirty || item.travelDirty || (item.wearPoints ?? 0) >= 3)
   );
 
-  // Filter logic
   const filteredClothes = visibleClothes.filter((item) => {
-    const colorMatch = item.color
-      .toLowerCase()
-      .includes(searchColor.toLowerCase());
-
+    // cat
     const catMatch = filterCategory
       ? item.category === filterCategory
       : true;
-
+    // color
+    const firstColor = (item.colors && item.colors.length>0)
+      ? item.colors[0].toLowerCase()
+      : '';
+    const colorMatch = firstColor.includes(searchColor.toLowerCase());
+    // status
     const status = getStatus(item);
-    const statusMatch = statusFilter ? status === statusFilter : true;
+    const statusMatch = statusFilter
+      ? status === statusFilter
+      : true;
+    // brand
+    const brandVal = (item.brand || '').toLowerCase();
+    const brandMatch = brandVal.includes(brandSearch.toLowerCase());
+    // marker
+    let markerVal = true;
+    if (markerSearch) {
+      markerVal = (item.markers||[]).map(m=>m.toLowerCase()).includes(markerSearch.toLowerCase());
+    }
 
-    return colorMatch && catMatch && statusMatch;
+    return catMatch && colorMatch && statusMatch && brandMatch && markerVal;
   });
 
   const handleWearClick = (id) => {
@@ -78,9 +90,8 @@ export default function DailyOutfitsPage({
         Daily Outfits
       </Typography>
 
-      {/* Filters */}
       <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <TextField
             label="Filter by Color"
             variant="outlined"
@@ -89,7 +100,7 @@ export default function DailyOutfitsPage({
             onChange={(e) => setSearchColor(e.target.value)}
           />
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <FormControl fullWidth>
             <InputLabel>Filter by Category</InputLabel>
             <Select
@@ -97,7 +108,7 @@ export default function DailyOutfitsPage({
               label="Filter by Category"
               onChange={(e) => setFilterCategory(e.target.value)}
             >
-              <MenuItem value="">All Categories</MenuItem>
+              <MenuItem value="">All</MenuItem>
               {categories.map((cat) => (
                 <MenuItem key={cat} value={cat}>
                   {cat}
@@ -106,7 +117,7 @@ export default function DailyOutfitsPage({
             </Select>
           </FormControl>
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <FormControl fullWidth>
             <InputLabel>Wear Status</InputLabel>
             <Select
@@ -118,8 +129,31 @@ export default function DailyOutfitsPage({
               <MenuItem value="Fresh">Fresh</MenuItem>
               <MenuItem value="Light Wear">Light Wear</MenuItem>
               <MenuItem value="Moderate Wear">Moderate Wear</MenuItem>
+              <MenuItem value="Dirty">Dirty</MenuItem>
             </Select>
           </FormControl>
+        </Grid>
+        {/* brand */}
+        <Grid item xs={12} md={3}>
+          <TextField
+            label="Brand"
+            variant="outlined"
+            fullWidth
+            value={brandSearch}
+            onChange={(e) => setBrandSearch(e.target.value)}
+          />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid item xs={12} md={4}>
+          <TextField
+            label="Marker Search"
+            variant="outlined"
+            fullWidth
+            value={markerSearch}
+            onChange={(e) => setMarkerSearch(e.target.value)}
+          />
         </Grid>
       </Grid>
 
@@ -149,7 +183,6 @@ export default function DailyOutfitsPage({
         </Grid>
       )}
 
-      {/* Dialog for Light/Moderate/Heavy */}
       <Dialog open={openDialog} onClose={() => handleDialogClose(false)}>
         <DialogTitle>Choose Wear Level</DialogTitle>
         <DialogContent>

@@ -13,39 +13,49 @@ import {
 import ClothingCard from '../components/ClothingCard';
 
 function getStatus(item) {
-  if (item.dirty || item.wearPoints >= 3) return 'Dirty';
-  if (item.wearPoints === 2) return 'Moderate Wear';
-  if (item.wearPoints === 1) return 'Light Wear';
+  if (item.travelDirty || item.dirty || (item.wearPoints ?? 0) >= 3) return 'Dirty';
+  if ((item.wearPoints ?? 0) === 2) return 'Moderate Wear';
+  if ((item.wearPoints ?? 0) === 1) return 'Light Wear';
   return 'Fresh';
 }
 
 export default function ClothingListPage({
   clothes = [],
   categories = [],
+  colorList = [],
+  brandList = []
 }) {
   const [filterCategory, setFilterCategory] = useState('');
   const [searchColor, setSearchColor] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [brandSearch, setBrandSearch] = useState('');
+  const [markerSearch, setMarkerSearch] = useState('');
 
-  // Filter logic
   const filteredClothes = clothes.filter((item) => {
-    // Filter by category
+    // category
     const catMatch = filterCategory
       ? item.category === filterCategory
       : true;
+    // color
+    const firstColor = item.colors && item.colors[0]
+      ? item.colors[0].toLowerCase()
+      : '';
+    const colorMatch = firstColor.includes(searchColor.toLowerCase());
 
-    // Filter by color substring
-    const colorMatch = item.color
-      .toLowerCase()
-      .includes(searchColor.toLowerCase());
-
-    // Filter by wear status
     const status = getStatus(item);
-    const statusMatch = statusFilter
-      ? status === statusFilter
-      : true;
+    const statusMatch = statusFilter ? status === statusFilter : true;
 
-    return catMatch && colorMatch && statusMatch;
+    const brandVal = (item.brand || '').toLowerCase();
+    const brandMatch = brandVal.includes(brandSearch.toLowerCase());
+
+    let markerVal = true;
+    if (markerSearch) {
+      markerVal = (item.markers || [])
+        .map(m => m.toLowerCase())
+        .includes(markerSearch.toLowerCase());
+    }
+
+    return catMatch && colorMatch && statusMatch && brandMatch && markerVal;
   });
 
   return (
@@ -54,19 +64,19 @@ export default function ClothingListPage({
         All Clothes
       </Typography>
 
-      {/* Filter Inputs */}
       <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} md={4}>
+        {/* color filter */}
+        <Grid item xs={12} md={3}>
           <TextField
             label="Filter by Color"
             variant="outlined"
             fullWidth
             value={searchColor}
             onChange={(e) => setSearchColor(e.target.value)}
+            helperText="Type a color substring. E.g. 'blu'"
           />
         </Grid>
-
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <FormControl fullWidth>
             <InputLabel>Filter by Category</InputLabel>
             <Select
@@ -74,7 +84,7 @@ export default function ClothingListPage({
               label="Filter by Category"
               onChange={(e) => setFilterCategory(e.target.value)}
             >
-              <MenuItem value="">All Categories</MenuItem>
+              <MenuItem value="">All</MenuItem>
               {categories.map((cat) => (
                 <MenuItem key={cat} value={cat}>
                   {cat}
@@ -83,9 +93,7 @@ export default function ClothingListPage({
             </Select>
           </FormControl>
         </Grid>
-
-        {/* Filter by status */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <FormControl fullWidth>
             <InputLabel>Wear Status</InputLabel>
             <Select
@@ -100,6 +108,28 @@ export default function ClothingListPage({
               <MenuItem value="Dirty">Dirty</MenuItem>
             </Select>
           </FormControl>
+        </Grid>
+        {/* brand filter */}
+        <Grid item xs={12} md={3}>
+          <TextField
+            label="Brand"
+            variant="outlined"
+            fullWidth
+            value={brandSearch}
+            onChange={(e) => setBrandSearch(e.target.value)}
+          />
+        </Grid>
+      </Grid>
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid item xs={12} md={4}>
+          <TextField
+            label="Marker Search"
+            variant="outlined"
+            fullWidth
+            value={markerSearch}
+            onChange={(e) => setMarkerSearch(e.target.value)}
+            helperText="E.g. 'Casual', 'Winter', etc."
+          />
         </Grid>
       </Grid>
 
