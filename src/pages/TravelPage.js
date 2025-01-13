@@ -391,7 +391,7 @@ function TravelCategoryListing({ items, onWearClothing, isDirtySection=false }) 
                         sx={{ mt:1, ml:1 }}
                         onClick={() => onWearClothing(it.id, 'Moderate Wear')}
                       >
-                        Wear (Mod)
+                        Wear (Med)
                       </Button>
                       <Button
                         variant="outlined"
