@@ -24,6 +24,21 @@ import {
   setDoc
 } from 'firebase/firestore';
 
+const CATEGORIES = [
+  'T-Shirts',
+  'Polos',
+  'Shirts',
+  'Shorts',
+  'Gym Shorts',
+  'Sweatpants',
+  'Jeans',
+  'Hoodie',
+  'Sweater',
+  'Jacket',
+  'Socks',
+  'Underwear',
+];
+
 /** You can store your color list and brand list in Firestore or keep them local.
  *  For simplicity, let's keep them local in memory, updated whenever we see new items.
  */
@@ -195,7 +210,7 @@ function App() {
               user ? (
                 <ClothingListPage
                   clothes={clothes}
-                  categories={[] /* pass an array of categories if you want */}
+                  categories={CATEGORIES}
                   colorList={colorList}
                   brandList={brandList}
                 />
@@ -210,7 +225,7 @@ function App() {
               user ? (
                 <AddClothingPage
                   onAddClothing={handleAddClothing}
-                  categories={[] /* or pass some categories */}
+                  categories={CATEGORIES}
                   colorList={colorList}
                   brandList={brandList}
                   setColorList={setColorList}
@@ -237,7 +252,7 @@ function App() {
               user ? (
                 <DailyOutfitsPage
                   clothes={clothes}
-                  categories={[]}
+                  categories={CATEGORIES}
                   onWearClothing={handleWearClothing}
                 />
               ) : (
